@@ -26,16 +26,24 @@ ggplot()+
 
 
 
+
 library(XML)
 library(readr)
+library(stringr)
+
+# setwd("~/Documents/ww2_casualties/")
+
+img_dir <- "www/"
+if (!dir.exists(img_dir)) {dir.create(img_dir)}
+
 
 url <- "https://en.wikipedia.org/wiki/World_War_II_casualties"
 
-lines <- readLines(url)
+# Get table
+lines <- read_html(url)
+tab <- data.frame(lines %>% html_node("table") %>% html_table())
 
-lines <- gsub("<span></span>", 1, lines)
-
-tab <- cbind(readHTMLTable(lines, header=T, which=1,stringsAsFactors=F))
+# tab <- cbind(readHTMLTable(lines, header=T, which=1,stringsAsFactors=F))
 
 # Save names
 orig_names <- names(tab)
@@ -133,6 +141,45 @@ tab <- dplyr::select(tab,
                      pc_pop)
 
 
+# Clean up rows (countries)
+# Remove ones included with others 
+included_countries <- tab[grepl("Included", tab_notes$mil_all_causes), "country"]
+tab <- subset(tab, !(country %in% included_countries) )
+
+# Remove small population
+tab <- subset(tab, pop_39 > 1000000)
+
+# Save and clean countries
+countries <- tab$country
+countries_for_grep <- c(countries, "Czech_Republic")
+countries_for_grep <- gsub(" ", "_", countries_for_grep)
+
+# Flags
+
+# Download flags
+flag_urls <- lines %>% html_elements("img") %>% html_attr("src")
+flag_urls <- grep("Flag", flag_urls, value = T)
+flag_urls <- gsub("^//", "", flag_urls)
+flag_urls <- gsub("\\d+px", "1200px", flag_urls)
+
+flag_not_found <- c()
+for(country in countries_for_grep){
+  print(country)
+  flag <- unique(grep(country, flag_urls, value = T))
+  file <- paste0(img_dir, country, ".png")
+  tryCatch({
+    if(!(file.exists(file))){download.file(flag, file)}
+  }, error = function(e){
+    flag_not_found <<- c(flag_not_found, country)
+    cat("ERROR :",conditionMessage(e), "\n")
+  })
+}
+
+
+
+
+ggplot()+
+  geom_bar(data = tab, aes(x = country, y = total), stat = "identity")
 
 
 
