@@ -149,23 +149,44 @@ tab <- subset(tab, !(country %in% included_countries) )
 # Remove small population
 tab <- subset(tab, pop_39 > 1000000)
 
-# Save and clean countries
+# Save and clean countries; make df for lookup later
 countries <- tab$country
-countries_for_grep <- c(countries, "Czech_Republic")
-countries_for_grep <- gsub(" ", "_", countries_for_grep)
+# Add anomalous names
+# countries_for_grep <- c(countries, "Czech_Republic", "British_Raj")
+countries_for_grep <- gsub(" ", "_", countries)
+
+
+country_df <- data.frame(countries = countries, 
+                         search_term = countries_for_grep)
+
+# Have to manually add search terms for some countries
+c("Czechoslovakia", "Czech_Republic")
+c("Dutch_East_Indies", "Netherlands")
+c("French_Indochina", "France")
+c("Malaya_&_Singapore", "United_Kingdom")
+c("India", "British_Raj")
+c("Papua_and_New_Guinea", "Australia")
+c("Ruanda-Urundi", "Belgium")
+
+
+select(country_df, !(countries == "Other nations"))
+
+
+
+
 
 # Flags
 
 # Download flags
 flag_urls <- lines %>% html_elements("img") %>% html_attr("src")
-flag_urls <- grep("Flag", flag_urls, value = T)
+flag_urls <- grep("Flag|Ensign", flag_urls, value = T)
 flag_urls <- gsub("^//", "", flag_urls)
 flag_urls <- gsub("\\d+px", "1200px", flag_urls)
 
 flag_not_found <- c()
 for(country in countries_for_grep){
   print(country)
-  flag <- unique(grep(country, flag_urls, value = T))
+  flag <- unique(grep(country, flag_urls, value = T))[1]
   file <- paste0(img_dir, country, ".png")
   tryCatch({
     if(!(file.exists(file))){download.file(flag, file)}
@@ -174,6 +195,9 @@ for(country in countries_for_grep){
     cat("ERROR :",conditionMessage(e), "\n")
   })
 }
+
+
+
 
 
 
