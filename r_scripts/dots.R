@@ -1,27 +1,29 @@
 
-
 library(ggplot2)
 
-n <- 1000
-max <- 200
 
-mtrx <- matrix(data = 1:n, ncol = max)
-nrow_mtrx <- nrow(mtrx)
 
-df <- data.frame(x = rep(1:max, each = nrow_mtrx), 
-                 y = rep(1:nrow_mtrx, max))
-
-sz <- 0.05
-ggplot()+
-  geom_point(data = df, aes(x = x, y = y), size = sz) + 
-  theme_classic()+
-  theme(axis.line=element_blank(),axis.text.x=element_blank(),
-        axis.text.y=element_blank(),axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),legend.position="none",
-        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
-        panel.grid.minor=element_blank(),plot.background=element_blank())+
-  ggtitle(paste(as.character(n), "dots"))
+# DOTS 
+# n <- 1000
+# max <- 200
+# 
+# mtrx <- matrix(data = 1:n, ncol = max)
+# nrow_mtrx <- nrow(mtrx)
+# 
+# df <- data.frame(x = rep(1:max, each = nrow_mtrx),
+#                  y = rep(1:nrow_mtrx, max))
+# 
+# sz <- 0.05
+# ggplot()+
+#   geom_point(data = df, aes(x = x, y = y), size = sz) +
+#   theme_classic()+
+#   theme(axis.line=element_blank(),axis.text.x=element_blank(),
+#         axis.text.y=element_blank(),axis.ticks=element_blank(),
+#         axis.title.x=element_blank(),
+#         axis.title.y=element_blank(),legend.position="none",
+#         panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+#         panel.grid.minor=element_blank(),plot.background=element_blank())+
+#   ggtitle(paste(as.character(n), "dots"))
 
 
 
@@ -30,20 +32,31 @@ ggplot()+
 library(XML)
 library(readr)
 library(stringr)
+library(reshape2)
+library(rvest)
 
-# setwd("~/Documents/ww2_casualties/")
+options(scipen = 999)
 
+# Paths
 img_dir <- "www/"
 if (!dir.exists(img_dir)) {dir.create(img_dir)}
+data_path <- "data/"
 
-
+# Files
 url <- "https://en.wikipedia.org/wiki/World_War_II_casualties"
+country_manual_lookup_file <- paste0(data_path, "country_manual_lookup.csv")
+allied_axis_lookup_file <- paste0(data_path, "allied_axis_lookup.csv")
 
-# Get table
-lines <- read_html(url)
+# Load files/data
+country_manual_lookup <- read.csv(country_manual_lookup_file)
+allied_axis_lookup <- read.csv(allied_axis_lookup_file)
+
+lines <- rvest::read_html(url)
 tab <- data.frame(lines %>% html_node("table") %>% html_table())
 
 # tab <- cbind(readHTMLTable(lines, header=T, which=1,stringsAsFactors=F))
+
+# Clean
 
 # Save names
 orig_names <- names(tab)
@@ -151,29 +164,31 @@ tab <- subset(tab, pop_39 > 1000000)
 
 # Save and clean countries; make df for lookup later
 countries <- tab$country
-# Add anomalous names
-# countries_for_grep <- c(countries, "Czech_Republic", "British_Raj")
+# Remove space for file names
 countries_for_grep <- gsub(" ", "_", countries)
 
+# Divide cols with millions by 1m i.e. 25,000,000 -> 25
+tab$mean_mil_all_causes_rnd <- tab$mean_mil_all_causes/1000000
+tab$mean_civ_mil_rnd <- tab$mean_civ_mil/1000000
+tab$total_rnd <- tab$total/1000000
 
+# Clean
 country_df <- data.frame(countries = countries, 
                          search_term = countries_for_grep)
 
+country_df <- subset(country_df, !(countries == "Other nations"))
+
 # Have to manually add search terms for some countries
-c("Czechoslovakia", "Czech_Republic")
-c("Dutch_East_Indies", "Netherlands")
-c("French_Indochina", "France")
-c("Malaya_&_Singapore", "United_Kingdom")
-c("India", "British_Raj")
-c("Papua_and_New_Guinea", "Australia")
-c("Ruanda-Urundi", "Belgium")
+# Some flags use another country's flag e.g. Ruanda-Urundi is the Belgium flag
+# Use this table later for selecting the right flag file
+# "left join" but replace values
+country_df <- country_df %>% 
+  rows_update(country_manual_lookup, by = "countries")
 
 
-select(country_df, !(countries == "Other nations"))
+# Add axis/allied column 
 
-
-
-
+tab <- merge(tab, allied_axis_lookup, by = "country", all.x = T, sort = F)
 
 # Flags
 
@@ -197,15 +212,59 @@ for(country in countries_for_grep){
 }
 
 
+# Plot 
+
+# Total
+ggplot()+
+  geom_bar(data = tab, 
+           aes(x = country, y = total), 
+           stat = "identity")+
+  scale_y_continuous(breaks = seq(0, max(tab$total), by = 1000000), 
+                     labels = scales::label_number_si())+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 
+# Civilian, military and % together
+mil_civ_pc <- melt(select(tab, country, mean_mil_all_causes_rnd, mean_civ_mil_rnd, pc_pop, aa))
 
-
+# Clean
+mil_civ_pc <- subset(mil_civ_pc, !(aa %in% "Neutral") )
+mil_civ_pc <- subset(mil_civ_pc, !(is.na(value)) )
 
 ggplot()+
-  geom_bar(data = tab, aes(x = country, y = total), stat = "identity")
+  geom_bar(data = mil_civ_pc,
+           aes(x = country, y = value, fill = variable),
+           stat = "identity",
+           position = "dodge")+
+  scale_y_continuous(breaks = seq(0, max(tab$pc_pop), by = 1))+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  coord_flip()+
+  scale_x_discrete(limits=rev)+
+  facet_grid(rows = vars(aa),
+             scales = "free_y",
+             space = "free_y", 
+             switch = "y")
 
+library(tidyverse)
+mtcars %>% 
+  rownames_to_column("car") %>% 
+  ggplot(aes(car, disp)) +
+  geom_col() +
+  coord_flip() +
+  facet_grid(rows = vars(cyl))
 
+# (facet_grid() code: https://community.rstudio.com/t/normalising-column-width-whilst-using-facet-wrap-and-coord-flip-in-ggplot2/70617/2)
+
+# Military/civilian
+ggplot()+
+  geom_bar(data = melt(select(tab, country, mean_mil_all_causes, mean_civ_mil)), 
+           aes(x = country, y = value, fill = variable), 
+           stat = "identity", 
+           position="dodge")+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 
 # Remove all notes
