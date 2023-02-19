@@ -1,5 +1,5 @@
 
-library(ggplot2)
+
 
 
 
@@ -27,13 +27,17 @@ library(ggplot2)
 
 
 
+setwd("~/Documents/ww2_casualties/")
 
-
+library(ggplot2)
 library(XML)
 library(readr)
 library(stringr)
 library(reshape2)
 library(rvest)
+library(dplyr)
+library(png)
+library(jpeg)
 
 options(scipen = 999)
 
@@ -42,12 +46,14 @@ img_dir <- "www/"
 if (!dir.exists(img_dir)) {dir.create(img_dir)}
 data_path <- "data/"
 
-# Files
+# Files ----
+
 url <- "https://en.wikipedia.org/wiki/World_War_II_casualties"
 country_manual_lookup_file <- paste0(data_path, "country_manual_lookup.csv")
 allied_axis_lookup_file <- paste0(data_path, "allied_axis_lookup.csv")
 
-# Load files/data
+# Load files/data ----
+
 country_manual_lookup <- read.csv(country_manual_lookup_file)
 allied_axis_lookup <- read.csv(allied_axis_lookup_file)
 
@@ -56,7 +62,7 @@ tab <- data.frame(lines %>% html_node("table") %>% html_table())
 
 # tab <- cbind(readHTMLTable(lines, header=T, which=1,stringsAsFactors=F))
 
-# Clean
+# Clean ----
 
 # Save names
 orig_names <- names(tab)
@@ -136,7 +142,6 @@ tab$mil_wounded <- as.vector(parse_number(tab$mil_wounded))
 tab$total <- rowSums(tab[c("mean_mil_all_causes", "mean_civ_mil", "mean_civ_other")], na.rm = T)
 tab$pc_pop <- round((tab$total / tab$pop_39) * 100, 2)
 
-
 # Arrange cols
 tab <- dplyr::select(tab, 
                      country, 
@@ -153,7 +158,6 @@ tab <- dplyr::select(tab,
                      total, 
                      pc_pop)
 
-
 # Clean up rows (countries)
 # Remove ones included with others 
 included_countries <- tab[grepl("Included", tab_notes$mil_all_causes), "country"]
@@ -162,15 +166,22 @@ tab <- subset(tab, !(country %in% included_countries) )
 # Remove small population
 tab <- subset(tab, pop_39 > 1000000)
 
+# Remove small total deaths
+tab <- subset(tab, total > 1000)
+
 # Save and clean countries; make df for lookup later
 countries <- tab$country
 # Remove space for file names
 countries_for_grep <- gsub(" ", "_", countries)
 
+# Combine "civilian deaths due to military activity" and "civilian deaths due to war-related famine and disease"
+tab$mean_all_civ <- rowSums( cbind (tab$mean_civ_mil, tab$mean_civ_other), na.rm=TRUE)
+
 # Divide cols with millions by 1m i.e. 25,000,000 -> 25
 tab$mean_mil_all_causes_rnd <- tab$mean_mil_all_causes/1000000
 tab$mean_civ_mil_rnd <- tab$mean_civ_mil/1000000
 tab$total_rnd <- tab$total/1000000
+tab$mean_all_civ_rnd <- tab$mean_all_civ/1000000
 
 # Clean
 country_df <- data.frame(countries = countries, 
@@ -183,14 +194,20 @@ country_df <- subset(country_df, !(countries == "Other nations"))
 # Use this table later for selecting the right flag file
 # "left join" but replace values
 country_df <- country_df %>% 
-  rows_update(country_manual_lookup, by = "countries")
-
+  dplyr::rows_update(country_manual_lookup, by = "countries")
 
 # Add axis/allied column 
-
 tab <- merge(tab, allied_axis_lookup, by = "country", all.x = T, sort = F)
 
-# Flags
+# Replace all NA with 0
+# https://www.r-bloggers.com/2022/06/replace-na-with-zero-in-r/#:~:text=T2%20R2%20139-,Using%20the%20dplyr%20package%20in%20R%2C%20you%20can%20use%20the,zero%20for%20any%20NA%20values.&text=0)-,To%20replace%20NA%20values%20in%20a%20particular%20column%20of%20a,replace%20NA%20values%20with%20zero.
+tab <- tab %>% replace(is.na(.), 0)
+
+# Remove neutral
+
+tab <- subset(tab, !(aa == "Neutral"))
+
+# Flags ----
 
 # Download flags
 flag_urls <- lines %>% html_elements("img") %>% html_attr("src")
@@ -199,20 +216,36 @@ flag_urls <- gsub("^//", "", flag_urls)
 flag_urls <- gsub("\\d+px", "1200px", flag_urls)
 
 flag_not_found <- c()
-for(country in countries_for_grep){
-  print(country)
-  flag <- unique(grep(country, flag_urls, value = T))[1]
-  file <- paste0(img_dir, country, ".png")
+flag_files <- vector()
+label_country_vect <- vector()
+for(country_grep in unique(country_df$search_term)){
+  flag <- unique(grep(country_grep, flag_urls, value = T))[1]
+  file <- paste0(img_dir, country_grep, ".png")
   tryCatch({
-    if(!(file.exists(file))){download.file(flag, file)}
+    if(!(file.exists(file))){
+      download.file(flag, file)
+      }
+    flag_files <- append(flag_files, file)
   }, error = function(e){
-    flag_not_found <<- c(flag_not_found, country)
+    flag_not_found <<- c(flag_not_found, country_grep)
     cat("ERROR :",conditionMessage(e), "\n")
   })
 }
 
+for (file in flag_files){
+  img <- readPNG(file)
+  file <- gsub(".png", ".jpg", file)
+  writeJPEG(img, target = file, quality = 0.10)
+}
 
-# Plot 
+# Add flag files and html code (for ggplot) to country df
+country_df$flag_file <- paste0(img_dir, country_df$search_term, ".jpg")
+country_df$flag_file_html <- paste0(country_df$countries, 
+                                    " <img src='", 
+                                    country_df$flag_file, 
+                                    "' width='20' />")
+
+# Plots ----
 
 # Total
 ggplot()+
@@ -224,50 +257,193 @@ ggplot()+
   theme_classic()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-
 # Civilian, military and % together
-mil_civ_pc <- melt(select(tab, country, mean_mil_all_causes_rnd, mean_civ_mil_rnd, pc_pop, aa))
+# mil_civ_pc <- melt(select(tab, country, mean_mil_all_causes_rnd, mean_civ_mil_rnd, pc_pop, aa))
+mil_civ_pc <- melt(select(tab, country, mean_mil_all_causes_rnd, mean_all_civ_rnd, pc_pop, aa))
 
 # Clean
 mil_civ_pc <- subset(mil_civ_pc, !(aa %in% "Neutral") )
-mil_civ_pc <- subset(mil_civ_pc, !(is.na(value)) )
+# mil_civ_pc <- subset(mil_civ_pc, !(is.na(value)) )
 
-ggplot()+
-  geom_bar(data = mil_civ_pc,
-           aes(x = country, y = value, fill = variable),
+# mil_civ_pc <- subset(mil_civ_pc,
+#                      country %in% c("France", "French Indochina", "United Kingdom"))
+
+
+
+# ggplot()+
+#   geom_bar(data = mil_civ_pc,
+#            aes(x = country, y = value, fill = variable),
+#            stat = "identity",
+#            position = "dodge")+
+#   scale_y_continuous(breaks = seq(0, max(tab$pc_pop), by = 1))+
+#   theme_classic()+
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+#   coord_flip()+
+#   scale_x_discrete(limits=rev)+
+#   facet_grid(rows = vars(aa),
+#              scales = "free_y",
+#              space = "free_y", 
+#              switch = "y")+
+#   geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
+#              color="gray", 
+#              size=.5, 
+#              alpha=.5)
+
+
+max_pc_pop <- ceiling(max(tab$pc_pop))
+
+
+mil_plot <- ggplot()+
+  geom_bar(data = tab,
+           aes(x = reorder(country, -mean_mil_all_causes_rnd), 
+               y = mean_mil_all_causes_rnd),
            stat = "identity",
-           position = "dodge")+
-  scale_y_continuous(breaks = seq(0, max(tab$pc_pop), by = 1))+
-  theme_classic()+
+           position = "dodge", 
+           fill = "darkgreen")+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
   coord_flip()+
-  scale_x_discrete(limits=rev)+
   facet_grid(rows = vars(aa),
              scales = "free_y",
              space = "free_y", 
-             switch = "y")
+             switch = "y")+
+  geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
+             color="gray", 
+             size=.5, 
+             alpha=.5)+
+  scale_x_discrete(limits=rev)+
+  scale_y_continuous(breaks = seq(0, max_pc_pop, by = 1), 
+                     limits = c(0, max_pc_pop))+
+  xlab("Country")+
+  ylab("Millions")+
+  ggtitle("Mean est. military deaths, all causes")+
+  theme_classic()
 
-library(tidyverse)
-mtcars %>% 
-  rownames_to_column("car") %>% 
-  ggplot(aes(car, disp)) +
-  geom_col() +
-  coord_flip() +
-  facet_grid(rows = vars(cyl))
+civ_plot <- ggplot()+
+  geom_bar(data = tab,
+           aes(x = reorder(country, -mean_all_civ_rnd), 
+               y = mean_all_civ_rnd),
+           stat = "identity",
+           position = "dodge", 
+           fill = "darkred")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  coord_flip()+
+  facet_grid(rows = vars(aa),
+             scales = "free_y",
+             space = "free_y", 
+             switch = "y")+
+  geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
+             color="gray", 
+             size=.5, 
+             alpha=.5)+
+  scale_x_discrete(limits=rev)+
+  scale_y_continuous(breaks = seq(0, max_pc_pop, by = 1), 
+                     limits = c(0, max_pc_pop))+
+  xlab("Country")+
+  ylab("Millions")+
+  ggtitle("Mean est. cililian deaths, all causes, including war-related famine and disease")+
+  theme_classic()
 
-# (facet_grid() code: https://community.rstudio.com/t/normalising-column-width-whilst-using-facet-wrap-and-coord-flip-in-ggplot2/70617/2)
+
+labels <- country_df$flag_file_html
+labels <- setNames(labels, country_df$countries)
+
+ggplot()+
+  geom_bar(data = tab,
+           aes(x = reorder(country, -pc_pop), 
+               y = pc_pop),
+           stat = "identity",
+           position = "dodge", 
+           fill = "darkblue")+
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  coord_flip()+
+  facet_grid(rows = vars(aa),
+             scales = "free_y",
+             space = "free_y", 
+             switch = "y")+
+  geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
+             color="gray", 
+             size=.5, 
+             alpha=.5)+
+  # scale_x_discrete(limits = rev)+
+  scale_x_discrete(name = NULL, labels = labels)+
+  theme(axis.text.y = element_markdown(color = "black", size = 11))+
+  scale_y_continuous(breaks = seq(0, max_pc_pop, by = 1), 
+                     limits = c(0, max_pc_pop))+
+  xlab("Country")+
+  ylab("Percentage")+
+  ggtitle("Percentage deaths of 1939 population")+
+  theme_classic()
+
+
+ggplot()+
+  geom_bar(data = tab,
+           aes(x = reorder(country, -pc_pop), 
+               y = pc_pop),
+           stat = "identity",
+           position = "dodge", 
+           fill = "darkblue")+
+  scale_x_discrete(name = NULL, 
+                   labels = labels)+
+  theme(axis.text.y = element_markdown(color = "black", size = 11))+
+  coord_flip()
+
+
+# ggplot()+
+#   geom_bar(data = subset(tab, country == "Albania"),
+#            aes(x = reorder(country, -pc_pop), 
+#                y = pc_pop),
+#            stat = "identity",
+#            position = "dodge")+
+#   scale_x_discrete(name = NULL, 
+#                    labels = c(Albania = "Albania <img src='www/Albania.jpg' width='20' /> "))+
+#   theme(axis.text.y = element_markdown(color = "black", size = 11))+
+#   coord_flip()
+
+
+# SOURCE: https://wilkelab.org/ggtext/
+remotes::install_github("wilkelab/ggtext")
+library(ggtext)
+
+labels <- c(
+  setosa = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Iris_setosa.JPG/180px-Iris_setosa.JPG'
+  width='100' /><br>*I. setosa*",
+  virginica = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Iris_virginica_-_NRCS.jpg/320px-Iris_virginica_-_NRCS.jpg'
+  width='100' /><br>*I. virginica*",
+  versicolor = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/20140427Iris_versicolor1.jpg/320px-20140427Iris_versicolor1.jpg'
+  width='100' /><br>*I. versicolor*"
+)
+
+# labels <- c(
+#   setosa = "www/setosa.jpg",
+#   virginica = "www/virginica.jpg",
+#   versicolor = "www/versicolor.jpg"
+# )
+
+labels <- c(
+  setosa = "<img src='www/setosa.jpg' width='100' /><br>I. setosa ",
+  virginica = "<img src='www/virginica.jpg' width='100' /><br>I. virginica",
+  versicolor = "<img src='www/versicolor.jpg' width='100' /><br>I. versicolor"
+)
+
+ggplot(iris, aes(Species, Sepal.Width))+
+  geom_boxplot()+
+  scale_x_discrete(name = NULL, labels = labels)+
+  theme(axis.text.x = element_markdown(color = "black", size = 11))
+
+# facet_grid() code: https://community.rstudio.com/t/normalising-column-width-whilst-using-facet-wrap-and-coord-flip-in-ggplot2/70617/2
+# geom_vline() code: https://stackoverflow.com/questions/54655751/ggplot-add-grid-lines-between-bars-groups
 
 # Military/civilian
-ggplot()+
-  geom_bar(data = melt(select(tab, country, mean_mil_all_causes, mean_civ_mil)), 
-           aes(x = country, y = value, fill = variable), 
-           stat = "identity", 
-           position="dodge")+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# ggplot()+
+#   geom_bar(data = melt(select(tab, country, mean_mil_all_causes, mean_civ_mil)), 
+#            aes(x = country, y = value, fill = variable), 
+#            stat = "identity", 
+#            position="dodge")+
+#   theme_classic()+
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# 
 
 
-# Remove all notes
 
 
 
