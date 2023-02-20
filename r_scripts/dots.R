@@ -1,8 +1,4 @@
 
-
-
-
-
 # DOTS 
 # n <- 1000
 # max <- 200
@@ -26,10 +22,17 @@
 #   ggtitle(paste(as.character(n), "dots"))
 
 
+# SOURCES:
+# facet_grid() code: https://community.rstudio.com/t/normalising-column-width-whilst-using-facet-wrap-and-coord-flip-in-ggplot2/70617/2
+# geom_vline() code: https://stackoverflow.com/questions/54655751/ggplot-add-grid-lines-between-bars-groups
+# Replace all NA with 0
+# https://www.r-bloggers.com/2022/06/replace-na-with-zero-in-r/#:~:text=T2%20R2%20139-,Using%20the%20dplyr%20package%20in%20R%2C%20you%20can%20use%20the,zero%20for%20any%20NA%20values.&text=0)-,To%20replace%20NA%20values%20in%20a%20particular%20column%20of%20a,replace%20NA%20values%20with%20zero.
+# Add image to xaxis https://wilkelab.org/ggtext/
 
 setwd("~/Documents/ww2_casualties/")
 
 library(ggplot2)
+library(ggtext)
 library(XML)
 library(readr)
 library(stringr)
@@ -245,57 +248,47 @@ country_df$flag_file_html <- paste0(country_df$countries,
                                     country_df$flag_file, 
                                     "' width='20' />")
 
+# Set up html labels for plots as named vector SOURCE: https://wilkelab.org/ggtext/
+labels <- country_df$flag_file_html
+labels <- setNames(labels, country_df$countries)
+
 # Plots ----
 
 # Total
-ggplot()+
-  geom_bar(data = tab, 
-           aes(x = country, y = total), 
-           stat = "identity")+
-  scale_y_continuous(breaks = seq(0, max(tab$total), by = 1000000), 
-                     labels = scales::label_number_si())+
+total_plot <- ggplot()+
   theme_classic()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-# Civilian, military and % together
-# mil_civ_pc <- melt(select(tab, country, mean_mil_all_causes_rnd, mean_civ_mil_rnd, pc_pop, aa))
-mil_civ_pc <- melt(select(tab, country, mean_mil_all_causes_rnd, mean_all_civ_rnd, pc_pop, aa))
-
-# Clean
-mil_civ_pc <- subset(mil_civ_pc, !(aa %in% "Neutral") )
-# mil_civ_pc <- subset(mil_civ_pc, !(is.na(value)) )
-
-# mil_civ_pc <- subset(mil_civ_pc,
-#                      country %in% c("France", "French Indochina", "United Kingdom"))
-
-
-
-# ggplot()+
-#   geom_bar(data = mil_civ_pc,
-#            aes(x = country, y = value, fill = variable),
-#            stat = "identity",
-#            position = "dodge")+
-#   scale_y_continuous(breaks = seq(0, max(tab$pc_pop), by = 1))+
-#   theme_classic()+
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
-#   coord_flip()+
-#   scale_x_discrete(limits=rev)+
-#   facet_grid(rows = vars(aa),
-#              scales = "free_y",
-#              space = "free_y", 
-#              switch = "y")+
-#   geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
-#              color="gray", 
-#              size=.5, 
-#              alpha=.5)
-
+  geom_bar(data = tab,
+           aes(x = reorder(country, total), 
+               y = total),
+           stat = "identity",
+           position = "dodge", 
+           fill = "grey")+
+  scale_y_continuous(breaks = seq(0, max(tab$total)+1000000, by = 1000000), 
+                     labels = scales::label_number_si())+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  coord_flip()+
+  facet_grid(rows = vars(aa),
+             scales = "free_y",
+             space = "free_y", 
+             switch = "y")+
+  geom_vline(xintercept = seq(0.5, length(tab$country), by = 1), 
+             color="gray", 
+             size=.5, 
+             alpha=.5)+
+  # Add flags
+  scale_x_discrete(name = NULL, 
+                   labels = labels)+
+  theme(axis.text.y = element_markdown(color = "black", size = 11))+
+  xlab("")+
+  ylab("Millions")+
+  ggtitle("Total deaths, all causes")
 
 max_pc_pop <- ceiling(max(tab$pc_pop))
 
-
 mil_plot <- ggplot()+
+  theme_classic()+
   geom_bar(data = tab,
-           aes(x = reorder(country, -mean_mil_all_causes_rnd), 
+           aes(x = reorder(country, mean_mil_all_causes_rnd), 
                y = mean_mil_all_causes_rnd),
            stat = "identity",
            position = "dodge", 
@@ -310,17 +303,20 @@ mil_plot <- ggplot()+
              color="gray", 
              size=.5, 
              alpha=.5)+
-  scale_x_discrete(limits=rev)+
+  # Add flags
+  scale_x_discrete(name = NULL, 
+                   labels = labels)+
+  theme(axis.text.y = element_markdown(color = "black", size = 11))+
   scale_y_continuous(breaks = seq(0, max_pc_pop, by = 1), 
                      limits = c(0, max_pc_pop))+
-  xlab("Country")+
+  xlab("")+
   ylab("Millions")+
-  ggtitle("Mean est. military deaths, all causes")+
-  theme_classic()
+  ggtitle("Mean est. military deaths, all causes")
 
 civ_plot <- ggplot()+
+  theme_classic()+
   geom_bar(data = tab,
-           aes(x = reorder(country, -mean_all_civ_rnd), 
+           aes(x = reorder(country, mean_all_civ_rnd), 
                y = mean_all_civ_rnd),
            stat = "identity",
            position = "dodge", 
@@ -335,27 +331,24 @@ civ_plot <- ggplot()+
              color="gray", 
              size=.5, 
              alpha=.5)+
-  scale_x_discrete(limits=rev)+
+  # Add flags
+  scale_x_discrete(name = NULL, 
+                   labels = labels)+
+  theme(axis.text.y = element_markdown(color = "black", size = 11))+
   scale_y_continuous(breaks = seq(0, max_pc_pop, by = 1), 
                      limits = c(0, max_pc_pop))+
-  xlab("Country")+
+  xlab("")+
   ylab("Millions")+
-  ggtitle("Mean est. cililian deaths, all causes, including war-related famine and disease")+
-  theme_classic()
+  ggtitle("Mean est. cililian deaths, all causes, including war-related famine and disease")
 
-
-labels <- country_df$flag_file_html
-labels <- setNames(labels, country_df$countries)
-
-ggplot()+
+pc_plot <- ggplot()+
+  theme_classic()+
   geom_bar(data = tab,
-           aes(x = reorder(country, -pc_pop), 
+           aes(x = reorder(country, pc_pop), 
                y = pc_pop),
            stat = "identity",
            position = "dodge", 
            fill = "darkblue")+
-  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
-  coord_flip()+
   facet_grid(rows = vars(aa),
              scales = "free_y",
              space = "free_y", 
@@ -364,85 +357,17 @@ ggplot()+
              color="gray", 
              size=.5, 
              alpha=.5)+
-  # scale_x_discrete(limits = rev)+
-  scale_x_discrete(name = NULL, labels = labels)+
-  theme(axis.text.y = element_markdown(color = "black", size = 11))+
-  scale_y_continuous(breaks = seq(0, max_pc_pop, by = 1), 
-                     limits = c(0, max_pc_pop))+
-  xlab("Country")+
-  ylab("Percentage")+
-  ggtitle("Percentage deaths of 1939 population")+
-  theme_classic()
-
-
-ggplot()+
-  geom_bar(data = tab,
-           aes(x = reorder(country, -pc_pop), 
-               y = pc_pop),
-           stat = "identity",
-           position = "dodge", 
-           fill = "darkblue")+
+  # Add flags
   scale_x_discrete(name = NULL, 
                    labels = labels)+
   theme(axis.text.y = element_markdown(color = "black", size = 11))+
-  coord_flip()
-
-
-# ggplot()+
-#   geom_bar(data = subset(tab, country == "Albania"),
-#            aes(x = reorder(country, -pc_pop), 
-#                y = pc_pop),
-#            stat = "identity",
-#            position = "dodge")+
-#   scale_x_discrete(name = NULL, 
-#                    labels = c(Albania = "Albania <img src='www/Albania.jpg' width='20' /> "))+
-#   theme(axis.text.y = element_markdown(color = "black", size = 11))+
-#   coord_flip()
-
-
-# SOURCE: https://wilkelab.org/ggtext/
-remotes::install_github("wilkelab/ggtext")
-library(ggtext)
-
-labels <- c(
-  setosa = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Iris_setosa.JPG/180px-Iris_setosa.JPG'
-  width='100' /><br>*I. setosa*",
-  virginica = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Iris_virginica_-_NRCS.jpg/320px-Iris_virginica_-_NRCS.jpg'
-  width='100' /><br>*I. virginica*",
-  versicolor = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/20140427Iris_versicolor1.jpg/320px-20140427Iris_versicolor1.jpg'
-  width='100' /><br>*I. versicolor*"
-)
-
-# labels <- c(
-#   setosa = "www/setosa.jpg",
-#   virginica = "www/virginica.jpg",
-#   versicolor = "www/versicolor.jpg"
-# )
-
-labels <- c(
-  setosa = "<img src='www/setosa.jpg' width='100' /><br>I. setosa ",
-  virginica = "<img src='www/virginica.jpg' width='100' /><br>I. virginica",
-  versicolor = "<img src='www/versicolor.jpg' width='100' /><br>I. versicolor"
-)
-
-ggplot(iris, aes(Species, Sepal.Width))+
-  geom_boxplot()+
-  scale_x_discrete(name = NULL, labels = labels)+
-  theme(axis.text.x = element_markdown(color = "black", size = 11))
-
-# facet_grid() code: https://community.rstudio.com/t/normalising-column-width-whilst-using-facet-wrap-and-coord-flip-in-ggplot2/70617/2
-# geom_vline() code: https://stackoverflow.com/questions/54655751/ggplot-add-grid-lines-between-bars-groups
-
-# Military/civilian
-# ggplot()+
-#   geom_bar(data = melt(select(tab, country, mean_mil_all_causes, mean_civ_mil)), 
-#            aes(x = country, y = value, fill = variable), 
-#            stat = "identity", 
-#            position="dodge")+
-#   theme_classic()+
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# 
-
+  scale_y_continuous(breaks = seq(0, max_pc_pop, by = 1), 
+                     limits = c(0, max_pc_pop))+
+  coord_flip()+
+  xlab("")+
+  ylab("Percentage")+
+  ggtitle("Percentage deaths of 1939 population")
+  
 
 
 
