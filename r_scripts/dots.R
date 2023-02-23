@@ -28,6 +28,7 @@
 # Replace all NA with 0
 # https://www.r-bloggers.com/2022/06/replace-na-with-zero-in-r/#:~:text=T2%20R2%20139-,Using%20the%20dplyr%20package%20in%20R%2C%20you%20can%20use%20the,zero%20for%20any%20NA%20values.&text=0)-,To%20replace%20NA%20values%20in%20a%20particular%20column%20of%20a,replace%20NA%20values%20with%20zero.
 # Add image to xaxis https://wilkelab.org/ggtext/
+# Add image to title: https://takehomessage.com/2019/12/18/r-package-ggtext/
 
 setwd("~/Documents/ww2_casualties/")
 
@@ -246,7 +247,7 @@ country_df$flag_file <- paste0(img_dir, country_df$search_term, ".jpg")
 country_df$flag_file_html <- paste0(country_df$countries, 
                                     " <img src='", 
                                     country_df$flag_file, 
-                                    "' width='20' />")
+                                    "' width='15' />")
 
 # Set up html labels for plots as named vector SOURCE: https://wilkelab.org/ggtext/
 labels <- country_df$flag_file_html
@@ -283,6 +284,9 @@ total_plot <- ggplot()+
   ylab("Millions")+
   ggtitle("Total deaths, all causes")
 
+ggsave(total_plot, 
+       filename = paste0(img_dir, "total_plot.png"))
+
 max_pc_pop <- ceiling(max(tab$pc_pop))
 
 mil_plot <- ggplot()+
@@ -299,7 +303,7 @@ mil_plot <- ggplot()+
              scales = "free_y",
              space = "free_y", 
              switch = "y")+
-  geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
+  geom_vline(xintercept = seq(0.5, length(tab$country), by = 1), 
              color="gray", 
              size=.5, 
              alpha=.5)+
@@ -312,6 +316,9 @@ mil_plot <- ggplot()+
   xlab("")+
   ylab("Millions")+
   ggtitle("Mean est. military deaths, all causes")
+
+ggsave(mil_plot, 
+       filename = paste0(img_dir, "mil_plot.png"))
 
 civ_plot <- ggplot()+
   theme_classic()+
@@ -327,7 +334,7 @@ civ_plot <- ggplot()+
              scales = "free_y",
              space = "free_y", 
              switch = "y")+
-  geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
+  geom_vline(xintercept = seq(0.5, length(tab$country), by = 1), 
              color="gray", 
              size=.5, 
              alpha=.5)+
@@ -341,6 +348,9 @@ civ_plot <- ggplot()+
   ylab("Millions")+
   ggtitle("Mean est. cililian deaths, all causes, including war-related famine and disease")
 
+ggsave(civ_plot, 
+       filename = paste0(img_dir, "civ_plot.png"))
+
 pc_plot <- ggplot()+
   theme_classic()+
   geom_bar(data = tab,
@@ -353,7 +363,7 @@ pc_plot <- ggplot()+
              scales = "free_y",
              space = "free_y", 
              switch = "y")+
-  geom_vline(xintercept = seq(0.5, length(mil_civ_pc$country), by = 1), 
+  geom_vline(xintercept = seq(0.5, length(tab$country), by = 1), 
              color="gray", 
              size=.5, 
              alpha=.5)+
@@ -368,14 +378,79 @@ pc_plot <- ggplot()+
   ylab("Percentage")+
   ggtitle("Percentage deaths of 1939 population")
   
+ggsave(pc_plot, 
+       filename = paste0(img_dir, "pc_plot.png"))
 
 
 
 
 
+# DOTS 
+# n <- 1000
+n <- 10
+sqrt_n <- floor(sqrt(n))
+cols <- sqrt_n
+rows <- sqrt_n
+
+remainder <- n - (sqrt_n^2)
+
+# Max width of dots across page/display
+# max <- 200
+
+# mtrx <- matrix(data = 1:n, ncol = max)
+# mtrx <- matrix(data = 1:sqrt(n), 
+#                ncol = sqrt(n), 
+#                nrow = )
+# nrow_mtrx <- nrow(mtrx)
+
+# df <- data.frame(x = rep(1:max, each = nrow_mtrx),
+#                  y = rep(1:nrow_mtrx, max))
+
+# df <- data.frame(x = rep(1:sqrt_n, each = sqrt_n),
+#                  y = rep(1:sqrt_n, sqrt_n)
+#                  )
+# 
+# df <- data.frame(x = rep(1:20, each = 50), 
+#                  y = rep(1:50, 20))
+# 
+# df <- data.frame(x = rep(1:50, each = 20), 
+#                  y = rep(1:20, 50))
+
+# Formula
+df <- data.frame(x = rep(1:cols, each = rows), 
+                 y = rep(1:rows, cols))
+
+remainder_df <- data.frame(x = 1:remainder, 
+                           y = rep(0, length(1:remainder)))
+
+df <- rbind(df, remainder_df)
+
+# sz <- 0.05
+
+sz <- 2
 
 
-
+# https://takehomessage.com/2019/12/18/r-package-ggtext/
+flag_code <- "Soviet Union <img src='www/Soviet_Union.jpg' width='100' />"
+ggplot()+
+  theme_classic()+
+  geom_point(data = df, aes(x = x, y = y), size = sz) +
+  # ggtitle(flag_code)+
+  labs(title = paste0(flag_code, " ", fmt(n), " dots"))+
+  theme(axis.line = element_blank(),
+        # axis.text.x = element_blank(),
+        # axis.text.y = element_blank(),
+        # axis.ticks = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.title = element_markdown(color = "black", size = 24),
+        legend.position="none",
+        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),plot.background=element_blank())+
+  coord_cartesian(xlim = c(-1, 5),
+                  ylim = c(-1, 5))
+  
+  # ggtitle(paste(as.character(n), "dots", "Soviet Union <img src='www/Soviet_Union.jpg' width='15' />"))
 
 
 
