@@ -30,6 +30,30 @@
 # Add image to xaxis https://wilkelab.org/ggtext/
 # Add image to title: https://takehomessage.com/2019/12/18/r-package-ggtext/
 
+
+
+
+x <- 100
+
+ind <- (10/x)*2
+
+plot(-sigmoid(seq(-10, 10, ind))+1)
+
+# 25,784,000
+
+# 26,000,000
+
+n <- 26000000
+
+n/1000
+
+n <- 100000
+
+
+
+
+
+
 setwd("~/Documents/ww2_casualties/")
 
 library(ggplot2)
@@ -42,6 +66,7 @@ library(rvest)
 library(dplyr)
 library(png)
 library(jpeg)
+library(sigmoid)
 
 options(scipen = 999)
 
@@ -386,55 +411,55 @@ ggsave(pc_plot,
 
 
 # DOTS 
-# n <- 1000
-n <- 10
+n <- 100000
 sqrt_n <- floor(sqrt(n))
-cols <- sqrt_n
-rows <- sqrt_n
-
 remainder <- n - (sqrt_n^2)
+sz <- sigmoid(n)
 
-# Max width of dots across page/display
-# max <- 200
+mat <- matrix(nrow = sqrt_n, 
+              ncol = sqrt_n)
 
-# mtrx <- matrix(data = 1:n, ncol = max)
-# mtrx <- matrix(data = 1:sqrt(n), 
-#                ncol = sqrt(n), 
-#                nrow = )
-# nrow_mtrx <- nrow(mtrx)
+for(row in 1:sqrt_n){
+  for(col in 1:sqrt_n){
+    mat[row, col] <- 1
+  }
+}
 
-# df <- data.frame(x = rep(1:max, each = nrow_mtrx),
-#                  y = rep(1:nrow_mtrx, max))
+mat_rem <- matrix(rep(NA, remainder),
+                  ncol = sqrt_n)
 
-# df <- data.frame(x = rep(1:sqrt_n, each = sqrt_n),
-#                  y = rep(1:sqrt_n, sqrt_n)
-#                  )
-# 
-# df <- data.frame(x = rep(1:20, each = 50), 
-#                  y = rep(1:50, 20))
-# 
-# df <- data.frame(x = rep(1:50, each = 20), 
-#                  y = rep(1:20, 50))
+i <- 0
+for(row in 1:nrow(mat_rem)){
+  for(col in 1:sqrt_n){
+    i <- i + 1
+    if(i <= remainder){
+      mat_rem[row, col] <- 1
+    }
+  }
+}
 
-# Formula
-df <- data.frame(x = rep(1:cols, each = rows), 
-                 y = rep(1:rows, cols))
+# Reverse remainder matrix rows (does not work if just one row)
+if(nrow(mat_rem) > 1){
+  mat_rem <- mat_rem[nrow(mat_rem):1, ]
+}
 
-remainder_df <- data.frame(x = 1:remainder, 
-                           y = rep(0, length(1:remainder)))
+# Combine main square matrix with remainder matrix
+mat <- rbind(mat_rem, mat)
 
-df <- rbind(df, remainder_df)
+# Put matrix into dataframe
+# df <- data.frame(melt(mat_rem, varnames = c("x", "y"), value.name = "z"))
+df <- data.frame(melt(mat, varnames = c("x", "y"), value.name = "z"))
 
-# sz <- 0.05
-
-sz <- 2
-
+# Remove NA values
+df <- df[!is.na(df[, "z"]), ]
 
 # https://takehomessage.com/2019/12/18/r-package-ggtext/
 flag_code <- "Soviet Union <img src='www/Soviet_Union.jpg' width='100' />"
+# ggplot()+
+#   theme_classic()+
+#   geom_point(data = df, aes(x = x, y = y), size = sz) +
 ggplot()+
-  theme_classic()+
-  geom_point(data = df, aes(x = x, y = y), size = sz) +
+  geom_point(data = df, aes(y, x), size = 0.25, stroke = 0)+
   # ggtitle(flag_code)+
   labs(title = paste0(flag_code, " ", fmt(n), " dots"))+
   theme(axis.line = element_blank(),
@@ -446,15 +471,21 @@ ggplot()+
         plot.title = element_markdown(color = "black", size = 24),
         legend.position="none",
         panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
-        panel.grid.minor=element_blank(),plot.background=element_blank())+
-  coord_cartesian(xlim = c(-1, 5),
-                  ylim = c(-1, 5))
+        panel.grid.minor=element_blank(),plot.background=element_blank())
+
   
   # ggtitle(paste(as.character(n), "dots", "Soviet Union <img src='www/Soviet_Union.jpg' width='15' />"))
 
 
 
+x <- 1:10
+y <- rep(1, 10)
+z <- seq(0.1, 1, 0.1)
 
+df <- data.frame(x = x, y = y, z = z)
+
+ggplot()+
+  geom_point(data = df, aes(x, y), stroke = 0, size = seq(1.1, 2, 0.1))
 
 
 
