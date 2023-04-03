@@ -393,24 +393,33 @@ ggsave(pc_plot,
 # If 1000, will be the floor of the square root (31 x 31), plus the remainder (39) 
 # added to the bottom row as a 31 x 8 matrix.
 
-n <- 1000
+n <- 50000
 sqrt_n <- floor(sqrt(n))
 remainder <- n - (sqrt_n^2)
 
-# Point size as linear proportion of n, betweeen 1 and 0.25
+# Point size as linear proportion of 1:max n (100k), betweeen 1 and 0.25
+# Plot max 100k dots, otherwise will break down - divide by 1000 if over 100k
+max_n <- 100000
 min_pt_sz <- 0.25
-sz <- -((1/n)*x) + 1
-if(sz < min_pt_sz){
-  sz <- min_pt_sz
-}
+
+# Linear function
+# y = mx + c
+x <- 1:max_n
+y <- -((1/max_n)*x) + 1
+lin_df <- data.frame(x = x, y = y)
+lin <- lm(y ~ x, data = lin_df)
+# Get size value
+sz <- predict(lin, newdata = data.frame(x = n))
+
+# Min point size selection
+sz <- max(c(min_pt_sz, sz))
 
 # Code to show flag in plot title
 # https://takehomessage.com/2019/12/18/r-package-ggtext/
 flag_code <- "Soviet Union <img src='www/Soviet_Union.jpg' width='100' />"
 
-# Plot max 100000 dots, otherwise will break down
-# So for large numbers (1m+), divide by 1000 and use 1 dot for 1000
-max_n <- 100000
+# So for large numbers, divide by 1000 and use 1 dot for 1000
+
 if(n > max_n){
   n <- n/1000
   plot_title <- paste0(flag_code, " ", fmt(n), " dots. 1 dot = 1000 people")
@@ -455,7 +464,7 @@ df <- data.frame(melt(mat, varnames = c("x", "y"), value.name = "z"))
 df <- df[!is.na(df[, "z"]), ]
 
 ggplot()+
-  geom_point(data = df, aes(y, x), size = 0.25, stroke = 0)+
+  geom_point(data = df, aes(y, x), size = sz, stroke = 0)+
   # ggtitle(flag_code)+
   labs(title = plot_title)+
   theme(axis.line = element_blank(),
