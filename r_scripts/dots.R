@@ -30,30 +30,6 @@
 # Add image to xaxis https://wilkelab.org/ggtext/
 # Add image to title: https://takehomessage.com/2019/12/18/r-package-ggtext/
 
-
-
-
-x <- 100
-
-ind <- (10/x)*2
-
-plot(-sigmoid(seq(-10, 10, ind))+1)
-
-# 25,784,000
-
-# 26,000,000
-
-n <- 26000000
-
-n/1000
-
-n <- 100000
-
-
-
-
-
-
 setwd("~/Documents/ww2_casualties/")
 
 library(ggplot2)
@@ -411,23 +387,48 @@ ggsave(pc_plot,
 
 
 # DOTS 
-n <- 100000
+
+# Plot dots "as square as possible"
+# For example if plotting 100 dots, dots will be 10 x 10.
+# If 1000, will be the floor of the square root (31 x 31), plus the remainder (39) 
+# added to the bottom row as a 31 x 8 matrix.
+
+n <- 1000
 sqrt_n <- floor(sqrt(n))
 remainder <- n - (sqrt_n^2)
-sz <- sigmoid(n)
 
-mat <- matrix(nrow = sqrt_n, 
-              ncol = sqrt_n)
-
-for(row in 1:sqrt_n){
-  for(col in 1:sqrt_n){
-    mat[row, col] <- 1
-  }
+# Point size as linear proportion of n, betweeen 1 and 0.25
+min_pt_sz <- 0.25
+sz <- -((1/n)*x) + 1
+if(sz < min_pt_sz){
+  sz <- min_pt_sz
 }
 
+# Code to show flag in plot title
+# https://takehomessage.com/2019/12/18/r-package-ggtext/
+flag_code <- "Soviet Union <img src='www/Soviet_Union.jpg' width='100' />"
+
+# Plot max 100000 dots, otherwise will break down
+# So for large numbers (1m+), divide by 1000 and use 1 dot for 1000
+max_n <- 100000
+if(n > max_n){
+  n <- n/1000
+  plot_title <- paste0(flag_code, " ", fmt(n), " dots. 1 dot = 1000 people")
+}else{
+  plot_title <- paste0(flag_code, " ", fmt(n), " dots.")
+}
+
+# Wrangle data for plot using matrices for 'main' square and 'remainder' square, and converting to data frame:
+
+# Main square
+mat <- matrix(1, nrow = sqrt_n, 
+              ncol = sqrt_n)
+
+# Remainder square
 mat_rem <- matrix(rep(NA, remainder),
                   ncol = sqrt_n)
 
+# Fill with 1 up to value of remainder
 i <- 0
 for(row in 1:nrow(mat_rem)){
   for(col in 1:sqrt_n){
@@ -453,15 +454,10 @@ df <- data.frame(melt(mat, varnames = c("x", "y"), value.name = "z"))
 # Remove NA values
 df <- df[!is.na(df[, "z"]), ]
 
-# https://takehomessage.com/2019/12/18/r-package-ggtext/
-flag_code <- "Soviet Union <img src='www/Soviet_Union.jpg' width='100' />"
-# ggplot()+
-#   theme_classic()+
-#   geom_point(data = df, aes(x = x, y = y), size = sz) +
 ggplot()+
   geom_point(data = df, aes(y, x), size = 0.25, stroke = 0)+
   # ggtitle(flag_code)+
-  labs(title = paste0(flag_code, " ", fmt(n), " dots"))+
+  labs(title = plot_title)+
   theme(axis.line = element_blank(),
         # axis.text.x = element_blank(),
         # axis.text.y = element_blank(),
@@ -477,15 +473,6 @@ ggplot()+
   # ggtitle(paste(as.character(n), "dots", "Soviet Union <img src='www/Soviet_Union.jpg' width='15' />"))
 
 
-
-x <- 1:10
-y <- rep(1, 10)
-z <- seq(0.1, 1, 0.1)
-
-df <- data.frame(x = x, y = y, z = z)
-
-ggplot()+
-  geom_point(data = df, aes(x, y), stroke = 0, size = seq(1.1, 2, 0.1))
 
 
 
