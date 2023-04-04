@@ -1,27 +1,3 @@
-
-# DOTS 
-# n <- 1000
-# max <- 200
-# 
-# mtrx <- matrix(data = 1:n, ncol = max)
-# nrow_mtrx <- nrow(mtrx)
-# 
-# df <- data.frame(x = rep(1:max, each = nrow_mtrx),
-#                  y = rep(1:nrow_mtrx, max))
-# 
-# sz <- 0.05
-# ggplot()+
-#   geom_point(data = df, aes(x = x, y = y), size = sz) +
-#   theme_classic()+
-#   theme(axis.line=element_blank(),axis.text.x=element_blank(),
-#         axis.text.y=element_blank(),axis.ticks=element_blank(),
-#         axis.title.x=element_blank(),
-#         axis.title.y=element_blank(),legend.position="none",
-#         panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
-#         panel.grid.minor=element_blank(),plot.background=element_blank())+
-#   ggtitle(paste(as.character(n), "dots"))
-
-
 # SOURCES:
 # facet_grid() code: https://community.rstudio.com/t/normalising-column-width-whilst-using-facet-wrap-and-coord-flip-in-ggplot2/70617/2
 # geom_vline() code: https://stackoverflow.com/questions/54655751/ggplot-add-grid-lines-between-bars-groups
@@ -42,13 +18,15 @@ library(rvest)
 library(dplyr)
 library(png)
 library(jpeg)
-library(sigmoid)
 
 options(scipen = 999)
 
 # Paths
-img_dir <- "www/"
-if (!dir.exists(img_dir)) {dir.create(img_dir)}
+# shiny_path <- "shiny/"
+# if (!dir.exists(shiny_path)) {dir.create(shiny_path)}
+r_scripts_path <- "r_scripts/"
+img_path <- paste0(r_scripts_path, "www/")
+if (!dir.exists(img_path)) {dir.create(img_path)}
 data_path <- "data/"
 
 # Files ----
@@ -212,6 +190,12 @@ tab <- tab %>% replace(is.na(.), 0)
 
 tab <- subset(tab, !(aa == "Neutral"))
 
+# Save
+write.csv(tab, 
+          file = paste0(data_path, "tab.csv"), 
+          quote = F, 
+          row.names = F)
+
 # Flags ----
 
 # Download flags
@@ -225,7 +209,7 @@ flag_files <- vector()
 label_country_vect <- vector()
 for(country_grep in unique(country_df$search_term)){
   flag <- unique(grep(country_grep, flag_urls, value = T))[1]
-  file <- paste0(img_dir, country_grep, ".png")
+  file <- paste0(img_path, country_grep, ".png")
   tryCatch({
     if(!(file.exists(file))){
       download.file(flag, file)
@@ -243,12 +227,17 @@ for (file in flag_files){
   writeJPEG(img, target = file, quality = 0.10)
 }
 
-# Add flag files and html code (for ggplot) to country df
-country_df$flag_file <- paste0(img_dir, country_df$search_term, ".jpg")
+# Add flag files and html code (for ggplot) to country df (country name, flag, size 15)
+country_df$flag_file <- paste0(img_path, country_df$search_term, ".jpg")
 country_df$flag_file_html <- paste0(country_df$countries, 
                                     " <img src='", 
                                     country_df$flag_file, 
                                     "' width='15' />")
+# Make another col for the dot plots code (flag, country name, size 100)
+country_df$flag_file_html_dots <- paste0(" <img src='", 
+                                         country_df$flag_file, 
+                                         "' width='100' />", 
+                                         country_df$countries)
 
 # Set up html labels for plots as named vector SOURCE: https://wilkelab.org/ggtext/
 labels <- country_df$flag_file_html
@@ -286,7 +275,7 @@ total_plot <- ggplot()+
   ggtitle("Total deaths, all causes")
 
 ggsave(total_plot, 
-       filename = paste0(img_dir, "total_plot.png"))
+       filename = paste0(img_path, "total_plot.png"))
 
 max_pc_pop <- ceiling(max(tab$pc_pop))
 
@@ -319,7 +308,7 @@ mil_plot <- ggplot()+
   ggtitle("Mean est. military deaths, all causes")
 
 ggsave(mil_plot, 
-       filename = paste0(img_dir, "mil_plot.png"))
+       filename = paste0(img_path, "mil_plot.png"))
 
 civ_plot <- ggplot()+
   theme_classic()+
@@ -350,7 +339,7 @@ civ_plot <- ggplot()+
   ggtitle("Mean est. cililian deaths, all causes, including war-related famine and disease")
 
 ggsave(civ_plot, 
-       filename = paste0(img_dir, "civ_plot.png"))
+       filename = paste0(img_path, "civ_plot.png"))
 
 pc_plot <- ggplot()+
   theme_classic()+
@@ -380,106 +369,110 @@ pc_plot <- ggplot()+
   ggtitle("Percentage deaths of 1939 population")
   
 ggsave(pc_plot, 
-       filename = paste0(img_dir, "pc_plot.png"))
+       filename = paste0(img_path, "pc_plot.png"))
 
 
-
-
-
-# DOTS 
-
-# Plot dots "as square as possible"
-# For example if plotting 100 dots, dots will be 10 x 10.
-# If 1000, will be the floor of the square root (31 x 31), plus the remainder (39) 
-# added to the bottom row as a 31 x 8 matrix.
-
-n <- 50000
-sqrt_n <- floor(sqrt(n))
-remainder <- n - (sqrt_n^2)
-
-# Point size as linear proportion of 1:max n (100k), betweeen 1 and 0.25
-# Plot max 100k dots, otherwise will break down - divide by 1000 if over 100k
-max_n <- 100000
-min_pt_sz <- 0.25
-
-# Linear function
-# y = mx + c
-x <- 1:max_n
-y <- -((1/max_n)*x) + 1
-lin_df <- data.frame(x = x, y = y)
-lin <- lm(y ~ x, data = lin_df)
-# Get size value
-sz <- predict(lin, newdata = data.frame(x = n))
-
-# Min point size selection
-sz <- max(c(min_pt_sz, sz))
-
-# Code to show flag in plot title
-# https://takehomessage.com/2019/12/18/r-package-ggtext/
-flag_code <- "Soviet Union <img src='www/Soviet_Union.jpg' width='100' />"
-
-# So for large numbers, divide by 1000 and use 1 dot for 1000
-
-if(n > max_n){
-  n <- n/1000
-  plot_title <- paste0(flag_code, " ", fmt(n), " dots. 1 dot = 1000 people")
-}else{
-  plot_title <- paste0(flag_code, " ", fmt(n), " dots.")
-}
-
-# Wrangle data for plot using matrices for 'main' square and 'remainder' square, and converting to data frame:
-
-# Main square
-mat <- matrix(1, nrow = sqrt_n, 
-              ncol = sqrt_n)
-
-# Remainder square
-mat_rem <- matrix(rep(NA, remainder),
-                  ncol = sqrt_n)
-
-# Fill with 1 up to value of remainder
-i <- 0
-for(row in 1:nrow(mat_rem)){
-  for(col in 1:sqrt_n){
-    i <- i + 1
-    if(i <= remainder){
-      mat_rem[row, col] <- 1
-    }
-  }
-}
-
-# Reverse remainder matrix rows (does not work if just one row)
-if(nrow(mat_rem) > 1){
-  mat_rem <- mat_rem[nrow(mat_rem):1, ]
-}
-
-# Combine main square matrix with remainder matrix
-mat <- rbind(mat_rem, mat)
-
-# Put matrix into dataframe
-# df <- data.frame(melt(mat_rem, varnames = c("x", "y"), value.name = "z"))
-df <- data.frame(melt(mat, varnames = c("x", "y"), value.name = "z"))
-
-# Remove NA values
-df <- df[!is.na(df[, "z"]), ]
-
-ggplot()+
-  geom_point(data = df, aes(y, x), size = sz, stroke = 0)+
-  # ggtitle(flag_code)+
-  labs(title = plot_title)+
-  theme(axis.line = element_blank(),
-        # axis.text.x = element_blank(),
-        # axis.text.y = element_blank(),
-        # axis.ticks = element_blank(),
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        plot.title = element_markdown(color = "black", size = 24),
-        legend.position="none",
-        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
-        panel.grid.minor=element_blank(),plot.background=element_blank())
+# # DOTS 
+# 
+# ctry <- "Soviet Union"
+# 
+# # Code to show flag in plot title
+# # https://takehomessage.com/2019/12/18/r-package-ggtext/
+# # flag_code <- "Soviet Union <img src='www/Soviet_Union.jpg' width='100' />"
+# flag_code <- country_df[country_df[, "countries"] == ctry, "flag_file_html"]
+# # Increase size
+# flag_code <- gsub("width='15'", "width='100'", flag_code)
+# 
+# # n <- 75000
+# n <- tab[tab[, "country"] == ctry, "total"]
+# 
+# # Point size as linear proportion of 1:max n (100k), betweeen 1 and 0.25
+# # Plot max 100k dots, otherwise will break down - divide by 1000 if over 100k
+# max_n <- 100000
+# 
+# # For large numbers, divide by 1000 and use 1 dot for 1000
+# if(n > max_n){
+#   n <- n/1000
+#   plot_title <- paste0(flag_code, " ", fmt(n), " dots. 1 dot = 1000 people")
+# }else{
+#   plot_title <- paste0(flag_code, " ", fmt(n), " dots.")
+# }
+# 
+# # Plot dots "as square as possible"
+# # For example if plotting 100 dots, dots will be 10 x 10.
+# # If 1000, will be the floor of the square root (31 x 31), plus the remainder (39) 
+# # added to the bottom row as a 31 x 8 matrix.
+# sqrt_n <- floor(sqrt(n))
+# remainder <- n - (sqrt_n^2)
+# 
+# # Point sizes 
+# 
+# # Linear function
+# # y = mx + c
+# min_pt_sz <- 0.25
+# x <- 1:max_n
+# y <- -((1/max_n)*x) + 1
+# lin_df <- data.frame(x = x, y = y)
+# lin <- lm(y ~ x, data = lin_df)
+# # Get size value
+# sz <- predict(lin, newdata = data.frame(x = n))
+# 
+# # Min point size selection
+# sz <- max(c(min_pt_sz, sz))
+# 
+# # Wrangle data for plot using matrices for 'main' square and 'remainder' square, and converting to data frame:
+# 
+# # Main square
+# mat <- matrix(1, nrow = sqrt_n, 
+#               ncol = sqrt_n)
+# 
+# # Remainder square
+# mat_rem <- matrix(rep(NA, remainder),
+#                   ncol = sqrt_n)
+# 
+# # Fill with 1 up to value of remainder
+# i <- 0
+# for(row in 1:nrow(mat_rem)){
+#   for(col in 1:sqrt_n){
+#     i <- i + 1
+#     if(i <= remainder){
+#       mat_rem[row, col] <- 1
+#     }
+#   }
+# }
+# 
+# # Reverse remainder matrix rows (does not work if just one row)
+# if(nrow(mat_rem) > 1){
+#   mat_rem <- mat_rem[nrow(mat_rem):1, ]
+# }
+# 
+# # Combine main square matrix with remainder matrix
+# mat <- rbind(mat_rem, mat)
+# 
+# # Put matrix into dataframe
+# # df <- data.frame(melt(mat_rem, varnames = c("x", "y"), value.name = "z"))
+# df <- data.frame(melt(mat, varnames = c("x", "y"), value.name = "z"))
+# 
+# # Remove NA values
+# df <- df[!is.na(df[, "z"]), ]
+# 
+# ggplot()+
+#   geom_point(data = df, aes(y, x), size = sz, stroke = 0)+
+#   # ggtitle(flag_code)+
+#   labs(title = plot_title)+
+#   theme(axis.line = element_blank(),
+#         axis.text.x = element_blank(),
+#         axis.text.y = element_blank(),
+#         axis.ticks = element_blank(),
+#         axis.title.x = element_blank(),
+#         axis.title.y = element_blank(),
+#         plot.title = element_markdown(color = "black", size = 24),
+#         legend.position="none",
+#         panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+#         panel.grid.minor=element_blank(),plot.background=element_blank())
 
   
-  # ggtitle(paste(as.character(n), "dots", "Soviet Union <img src='www/Soviet_Union.jpg' width='15' />"))
+
 
 
 
