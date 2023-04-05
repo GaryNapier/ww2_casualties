@@ -51,6 +51,21 @@ ui <- fluidPage(
      tags$br(), tags$br()
    )),
    
+   h4(tags$div(
+     "World War II was the deadliest military conflict in history.", 
+     tags$br(),
+     "An estimated total of 70–85 million people perished, or about 3% of the 2.3 billion (est.) people on Earth in 1940.", 
+     tags$br(), 
+     "Deaths directly caused by the war (including military and civilian fatalities) are estimated at 50–56 million, with an additional estimated 19–28 million deaths from war-related disease and famine.", 
+     tags$br(), 
+     "Civilian deaths totaled 50–55 million. Military deaths from all causes totaled 21–25 million, including deaths in captivity of about 5 million prisoners of war.",
+     tags$br(), 
+     "More than half of the total number of casualties are accounted for by the dead of the Republic of China and of the Soviet Union.",
+     style = 'width:1000px', align = "justify",
+     tags$br()
+   )),
+   
+   # Bar plots
    tags$br(),
    img(src = total_plot_file, width='1200px'),
    tags$br(),
@@ -61,7 +76,7 @@ ui <- fluidPage(
    img(src = civ_plot_file, width='1200px'),
    tags$br(),
    tags$br(),
-   img(src = pc_plot_file, width='1200px')
+   img(src = pc_plot_file, width='1200px'),
    
    # # Sidebar with a slider input for number of bins
    # sidebarLayout(
@@ -73,17 +88,33 @@ ui <- fluidPage(
    #                   value = 30)
    #    ), # sidebarPanel
 
-      
-      # # Show a plot of the generated distribution
-      # mainPanel(
-      #    # plotOutput("distPlot")
-      # ) # mainPanel
+   
+   
+   
+   mainPanel(
+     
+     selectInput("country", "Country:",
+                 unique(tab$country)
+                 ),
+     plotOutput("dots")
+     
+   ) # mainPanel
+
+   
+   
       # ) # sidebarLayout
 ) # fluidPage
 
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+  
+  output$dots <- renderPlot({
+    
+    # mtcars[, c("mpg", input$variable), drop = FALSE]
+    plot(tab[tab[, "country" == input$country], "total"])
+    
+  })
    
    # output$distPlot <- renderPlot({
    #    # generate bins based on input$bins from ui.R
@@ -93,7 +124,6 @@ server <- function(input, output) {
    #    # draw the histogram with the specified number of bins
    #    hist(x, breaks = bins, col = 'darkgray', border = 'white')
    # })
-   
    
 }
 
