@@ -29,7 +29,11 @@ data_path <- "../data/"
 # Files ----
 
 tab_file <- paste0(data_path, "tab.csv")
+# country_manual_lookup_file <- paste0(data_path, "country_manual_lookup.csv")
+country_df_file <- paste0(data_path, "country_df.csv")
+allied_axis_lookup_file <- paste0(data_path, "allied_axis_lookup.csv")
 
+# Plots
 total_plot_file <- "total_plot.png"
 mil_plot_file <- "mil_plot.png"
 civ_plot_file <- "civ_plot.png"
@@ -38,6 +42,9 @@ pc_plot_file <- "pc_plot.png"
 # Load files/data ----
 
 tab <- read.csv(tab_file)
+# country_manual_lookup <- read.csv(country_manual_lookup_file)
+country_df <- read.csv(country_df_file)
+allied_axis_lookup <- read.csv(allied_axis_lookup_file)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -96,7 +103,7 @@ ui <- fluidPage(
      selectInput("country", "Country:",
                  unique(tab$country)
                  ),
-     plotOutput("dots")
+     plotOutput("dots", height = "1200px")
      
    ) # mainPanel
 
@@ -109,22 +116,106 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
   
+  
   output$dots <- renderPlot({
     
-    # mtcars[, c("mpg", input$variable), drop = FALSE]
-    plot(tab[tab[, "country" == input$country], "total"])
+    ctry <- input$country
+    
+    n <- tab[tab[, "country"] == ctry, "total"]
+    
+    # Code to show flag in plot title
+    # https://takehomessage.com/2019/12/18/r-package-ggtext/
+    flag_code <- country_df[country_df[, "countries"] == ctry, "flag_file_html_dots"]
+    
+    flag_code <- gsub("r_scripts/", "", flag_code)
+
+    # Point size as linear proportion of 1:max n (100k), betweeen 1 and 0.25
+    # Plot max 100k dots, otherwise will break down - divide by 1000 if over 100k
+    max_n <- 100000
+
+    # For large numbers, divide by 1000 and use 1 dot for 1000
+    if(n > max_n){
+      n <- n/1000
+      plot_title <- paste0(flag_code, " ", fmt(n), " dots. 1 dot = 1000 people")
+    }else{
+      plot_title <- paste0(flag_code, " ", fmt(n), " dots.")
+    }
+
+    # Plot dots "as square as possible"
+    # For example if plotting 100 dots, dots will be 10 x 10.
+    # If 1000, will be the floor of the square root (31 x 31), plus the remainder (39)
+    # added to the bottom row as a 31 x 8 matrix.
+    sqrt_n <- floor(sqrt(n))
+    remainder <- n - (sqrt_n^2)
+
+    # Point sizes
+
+    # Linear function
+    # y = mx + c
+    min_pt_sz <- 0.25
+    x <- 1:max_n
+    y <- -((1/max_n)*x) + 1
+    lin_df <- data.frame(x = x, y = y)
+    lin <- lm(y ~ x, data = lin_df)
+    # Get size value
+    sz <- predict(lin, newdata = data.frame(x = n))
+
+    # Min point size selection
+    sz <- max(c(min_pt_sz, sz))
+
+    # Wrangle data for plot using matrices for 'main' square and 'remainder' square, and converting to data frame:
+
+    # Main square
+    mat <- matrix(1, nrow = sqrt_n,
+                  ncol = sqrt_n)
+
+    # Remainder square
+    mat_rem <- matrix(rep(NA, remainder),
+                      ncol = sqrt_n)
+
+    # Fill with 1 up to value of remainder
+    i <- 0
+    for(row in 1:nrow(mat_rem)){
+      for(col in 1:sqrt_n){
+        i <- i + 1
+        if(i <= remainder){
+          mat_rem[row, col] <- 1
+        }
+      }
+    }
+
+    # Reverse remainder matrix rows (does not work if just one row)
+    if(nrow(mat_rem) > 1){
+      mat_rem <- mat_rem[nrow(mat_rem):1, ]
+    }
+
+    # Combine main square matrix with remainder matrix
+    mat <- rbind(mat_rem, mat)
+
+    # Put matrix into dataframe
+    # df <- data.frame(melt(mat_rem, varnames = c("x", "y"), value.name = "z"))
+    df <- data.frame(melt(mat, varnames = c("x", "y"), value.name = "z"))
+
+    # Remove NA values
+    df <- df[!is.na(df[, "z"]), ]
+    
+    ggplot()+
+      geom_point(data = df, aes(y, x), size = sz, stroke = 0)+
+      # ggtitle(flag_code)+
+      labs(title = plot_title)+
+      theme(axis.line = element_blank(),
+            axis.text.x = element_blank(),
+            axis.text.y = element_blank(),
+            axis.ticks = element_blank(),
+            axis.title.x = element_blank(),
+            axis.title.y = element_blank(),
+            plot.title = element_markdown(color = "black", size = 24),
+            legend.position="none",
+            panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+            panel.grid.minor=element_blank(),plot.background=element_blank())
     
   })
-   
-   # output$distPlot <- renderPlot({
-   #    # generate bins based on input$bins from ui.R
-   #    x    <- faithful[, 2] 
-   #    bins <- seq(min(x), max(x), length.out = input$bins + 1)
-   #    
-   #    # draw the histogram with the specified number of bins
-   #    hist(x, breaks = bins, col = 'darkgray', border = 'white')
-   # })
-   
+  
 }
 
 # Run the application 
