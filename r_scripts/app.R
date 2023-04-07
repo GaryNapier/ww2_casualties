@@ -21,6 +21,25 @@ library(shiny)
 
 options(scipen = 999)
 
+point_size <- function(max_n,
+                       min_pt_sz = 0.25,
+                       max_pt_sz,
+                       n){
+  x <- 1:max_n
+  y <- -((1/max_n)*x^2) + 1
+  y <- rescale(y, to = c(min_pt_sz, max_pt_sz))
+  lin_df <- data.frame(x = x, y = y)
+  lin <- lm(y ~ poly(x, 2), data = lin_df)
+  
+  # Check with plot
+  # plot(x, y)
+  # lines(lin$fitted.values, type = "l", lty = 1, col = "blue")
+  # Get size value
+  sz <- predict(lin, newdata = data.frame(x = n))
+  sz
+  
+}
+
 # Paths ----
 
 img_dir <- "../www/"
@@ -45,6 +64,13 @@ tab <- read.csv(tab_file)
 # country_manual_lookup <- read.csv(country_manual_lookup_file)
 country_df <- read.csv(country_df_file)
 allied_axis_lookup <- read.csv(allied_axis_lookup_file)
+
+
+# Test row
+# tab <- rbind(tab, rep(NA, ncol(tab)))
+# tab[is.na(tab[, "country"]), "country"] <- "test"
+# tab[is.na(tab[, "total"]), "total"] <- 10
+
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -95,15 +121,15 @@ ui <- fluidPage(
    #                   value = 30)
    #    ), # sidebarPanel
 
-   
-   
-   
+  
    mainPanel(
      
      selectInput("country", "Country:",
                  unique(tab$country)
                  ),
-     plotOutput("dots", height = "1200px")
+     plotOutput("dots"
+                , height = "1000px"
+                )
      
    ) # mainPanel
 
@@ -153,15 +179,8 @@ server <- function(input, output) {
     # Linear function
     # y = mx + c
     min_pt_sz <- 0.25
-    x <- 1:max_n
-    y <- -((1/max_n)*x) + 1
-    lin_df <- data.frame(x = x, y = y)
-    lin <- lm(y ~ x, data = lin_df)
-    # Get size value
-    sz <- predict(lin, newdata = data.frame(x = n))
-
-    # Min point size selection
-    sz <- max(c(min_pt_sz, sz))
+    max_pt_sz <- 3
+    sz <- point_size(max_n, min_pt_sz, max_pt_sz, n)
 
     # Wrangle data for plot using matrices for 'main' square and 'remainder' square, and converting to data frame:
 
